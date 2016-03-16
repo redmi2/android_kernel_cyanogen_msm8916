@@ -4940,6 +4940,116 @@ static int smb1360_parse_parallel_charging_params(struct smb1360_chip *chip)
 	return 0;
 }
 
+#if defined(CONFIG_MACH_WT88047) && defined(CONFIG_BQ2022A_SUPPORT)
+extern int power_supply_set_charging_enabled(struct power_supply *psy, bool enabled);
+extern int bq2022a_get_bat_module_id(void);
+
+void smb1360_get_bat_character(struct smb1360_chip *chip)
+{
+	int rc;
+	int max_capacity = 0;
+	int capacity_coeff = 0;
+	int temp_coeff = 0;
+
+	switch (bq2022a_get_bat_module_id()) {
+	case 0:
+		max_capacity = 2200;
+		capacity_coeff = 0x8373;
+		temp_coeff = 0x85D2;
+		break;
+
+	case 1:
+		max_capacity = 2000;
+		capacity_coeff = 0x8819;
+		temp_coeff = 0x85D2;
+		break;
+
+	case 2:
+		max_capacity = 2000;
+		capacity_coeff = 0x8819;
+		temp_coeff = 0x85D2;
+		break;
+
+	case 3:
+		max_capacity = 2000;
+		capacity_coeff = 0x8819;
+		temp_coeff = 0x85D2;
+		break;
+
+	case 4:
+		max_capacity = 2000;
+		capacity_coeff = 0x8819;
+		temp_coeff = 0x85D2;
+		break;
+
+	case 5:
+		max_capacity = 2000;
+		capacity_coeff = 0x8819;
+		temp_coeff = 0x85E0;
+		break;
+
+	case 6:
+		max_capacity = 2000;
+		capacity_coeff = 0x8819;
+		temp_coeff = 0x85D2;
+		break;
+
+	case 7:
+		max_capacity = 2000;
+		capacity_coeff = 0x8819;
+		temp_coeff = 0x85E0;
+		break;
+
+	case 8:
+		max_capacity = 2200;
+		capacity_coeff = 0x8373;
+		temp_coeff = 0x85D2;
+		break;
+
+	case 9:
+		max_capacity = 2200;
+		capacity_coeff = 0x8373;
+		temp_coeff = 0x85E0;
+		break;
+
+	case 10:
+		max_capacity = 2200;
+		capacity_coeff = 0x8373;
+		temp_coeff = 0x85D2;
+		break;
+
+	case 17:
+		max_capacity = 2000;
+		capacity_coeff = 0x8819;
+		temp_coeff = 0x85D2;
+		break;
+
+	case 0xff:
+	default:
+		max_capacity = 0;
+		capacity_coeff = 0;
+		temp_coeff = 0;
+		pr_err("get battery ID error disable charge!!!\n");
+		rc = power_supply_set_charging_enabled(&(chip->batt_psy), 0);
+		if (rc)
+			pr_err("disable charging failed\n");
+		break;
+	}
+
+	if ((chip->batt_capacity_mah != -EINVAL) && (max_capacity))
+		chip->batt_capacity_mah = max_capacity;
+
+	if ((chip->cc_soc_coeff != -EINVAL) && (capacity_coeff))
+		chip->cc_soc_coeff = capacity_coeff;
+
+	if ((chip->fg_thermistor_c1_coeff != -EINVAL) && (temp_coeff))
+		chip->fg_thermistor_c1_coeff = temp_coeff;
+
+	pr_err("batt_capacity_mah=%d  cc_soc_coeff=0x%x  fg_thermistor_c1_coeff=0x%x \n",
+				chip->batt_capacity_mah, chip->cc_soc_coeff, chip->fg_thermistor_c1_coeff);
+}
+#endif
+
 static int smb_parse_dt(struct smb1360_chip *chip)
 {
 	int rc;
@@ -5263,6 +5373,10 @@ static int smb1360_probe(struct i2c_client *client,
 			"Unable to register batt_psy rc = %d\n", rc);
 		goto fail_hw_init;
 	}
+
+#if defined(CONFIG_MACH_WT88047) && defined(CONFIG_BQ2022A_SUPPORT)
+	smb1360_get_bat_character(chip);
+#endif
 
 	/* STAT irq configuration */
 	if (client->irq) {
