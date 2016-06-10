@@ -8,6 +8,7 @@
  * interface.
  *
  * Copyright (C) 2010 IBM Corperation
+ * Copyright (C) 2016 XiaoMi, Inc.
  *
  * Author: John Stultz <john.stultz@linaro.org>
  *
@@ -25,8 +26,6 @@
 #include <linux/posix-timers.h>
 #include <linux/workqueue.h>
 #include <linux/freezer.h>
-
-#define ALARM_DELTA 120
 
 /**
  * struct alarm_base - Alarm timer bases
@@ -56,18 +55,30 @@ static struct rtc_device	*rtcdev;
 static DEFINE_SPINLOCK(rtcdev_lock);
 static unsigned long power_on_alarm;
 static struct mutex power_on_alarm_lock;
+extern unsigned long secs_backup;
 
 void set_power_on_alarm(long secs, bool enable)
 {
 	int rc;
 	struct timespec wall_time;
-	long rtc_secs, alarm_time, alarm_delta;
-	struct rtc_time rtc_time;
+	long rtc_secs, alarm_time, alarm_delta, rtc_secs_alarm;
+	struct rtc_time rtc_time, rtc_time_alarm;
 	struct rtc_wkalrm alarm;
 
 	rc = mutex_lock_interruptible(&power_on_alarm_lock);
 	if (rc != 0)
 		return;
+
+	rtc_time_to_tm(secs_backup, &rtc_time_alarm);
+	rtc_tm_to_time(&rtc_time_alarm, &rtc_secs_alarm);
+
+	rtc_read_time(rtcdev, &rtc_time);
+	getnstimeofday(&wall_time);
+	rtc_tm_to_time(&rtc_time, &rtc_secs);
+	alarm_delta = wall_time.tv_sec - rtc_secs;
+
+	if (strstr(saved_command_line, "androidboot.mode=charger"))
+		secs = rtc_secs_alarm + alarm_delta;
 
 	if (enable) {
 			power_on_alarm = secs;
@@ -81,10 +92,6 @@ void set_power_on_alarm(long secs, bool enable)
 	if (!power_on_alarm)
 		goto disable_alarm;
 
-	rtc_read_time(rtcdev, &rtc_time);
-	getnstimeofday(&wall_time);
-	rtc_tm_to_time(&rtc_time, &rtc_secs);
-	alarm_delta = wall_time.tv_sec - rtc_secs;
 	alarm_time = power_on_alarm - alarm_delta;
 
 	/*

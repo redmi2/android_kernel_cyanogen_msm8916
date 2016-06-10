@@ -125,13 +125,6 @@
 			reg = <0x0 0x83000000 0x0 0xc00000>;
 			label = "cont_splash_mem";
 		};
-
-		wb_mem: wb_region@83c00000 {
-			linux,reserve-contiguous-region;
-			linux,reserve-region;
-			reg = <0x0 0x83c00000 0x0 0xc00000>;
-			label = "wb_mem";
-		};
 	};
 
 	soc: soc { };
@@ -287,7 +280,7 @@
 			<          0 0>,
 			<  400000000 4>,
 			<  800000000 5>,
-			< 1267200000 7>;
+			< 1305600000 7>;
 		qcom,speed2-bin-v0 =
 			<          0 0>,
 			<  400000000 4>,
@@ -320,7 +313,7 @@
 	};
 
 	qcom,cpu-bwmon {
-		compatible = "qcom,bimc-bwmon2";
+		compatible = "qcom,bimc-bwmon";
 		reg = <0x408000 0x300>, <0x401000 0x200>;
 		reg-names = "base", "global_base";
 		interrupts = <0 183 4>;
@@ -346,7 +339,7 @@
 			 < 1094400 >,
 			 < 1190400 >,
 			 < 1248000 >,
-			 < 1267200 >;
+			 < 1305600 >;
 	};
 
 
@@ -466,11 +459,6 @@
 		qcom,freq-mitigation-control-mask = <0x01>;
 		qcom,online-hotplug-core;
 		qcom,therm-reset-temp = <115>;
-		qcom,disable-cx-phase-ctrl;
-		qcom,disable-gfx-phase-ctrl;
-		qcom,disable-vdd-mx;
-		qcom,disable-psm;
-		qcom,disable-ocr;
 		qcom,vdd-restriction-temp = <5>;
 		qcom,vdd-restriction-temp-hysteresis = <10>;
 		vdd-dig-supply = <&pm8909_s1_floor_corner>;
@@ -662,7 +650,6 @@
 		qcom,rx-ring-size = <32>;
 		qcom,no-cpu-affinity;
 		qcom,max-rx-mtu = <4096>;
-		qcom,fast-shutdown;
 	};
 
 	qcom,smdtty {
@@ -1189,7 +1176,7 @@
 		clocks = <&clock_gcc clk_gcc_blsp1_ahb_clk>,
 			 <&clock_gcc clk_gcc_blsp1_qup4_i2c_apps_clk>;
 		clock-names = "iface_clk", "core_clk";
-		qcom,clk-freq-out = <400000>;
+		qcom,clk-freq-out = <100000>;
 		qcom,clk-freq-in  = <19200000>;
 		pinctrl-names = "i2c_active", "i2c_sleep";
 		pinctrl-0 = <&i2c_4_active>;
@@ -1388,8 +1375,8 @@
 		dai_mi2s3: qcom,msm-dai-q6-mi2s-quat {
 			compatible = "qcom,msm-dai-q6-mi2s";
 			qcom,msm-dai-q6-mi2s-dev-id = <3>;
-			qcom,msm-mi2s-rx-lines = <0>;
-			qcom,msm-mi2s-tx-lines = <3>;
+			qcom,msm-mi2s-rx-lines = <1>;
+			qcom,msm-mi2s-tx-lines = <2>;
 		};
 
 		dai_mi2s2: qcom,msm-dai-q6-mi2s-tert {
@@ -1460,11 +1447,6 @@
 			compatible = "qcom,msm-dai-q6-dev";
 			qcom,msm-dai-q6-dev-id = <12289>;
 		};
-
-                bt_a2dp_rx: qcom,msm-dai-q6-bt-a2dp-rx {
-                        compatible = "qcom,msm-dai-q6-dev";
-                        qcom,msm-dai-q6-dev-id = <12290>;
-                };
 
 		int_fm_rx: qcom,msm-dai-q6-int-fm-rx {
 			compatible = "qcom,msm-dai-q6-dev";

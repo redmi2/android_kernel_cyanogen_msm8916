@@ -22,7 +22,8 @@
 #include <linux/thermal.h>
 #include <linux/platform_device.h>
 #include "bq2022a-batid.h"
-/* #include <linux/hardware_info.h> */
+#include <linux/hardware_info.h>
+
 
 /* BQ2022A. */
 #define	ROM_COMMAND		(0xcc)
@@ -31,6 +32,7 @@
 #define	WADDR_HB			(0x00)
 #define	GPIO_HIGH 1
 #define	GPIO_LOW 0
+
 #define  GPIO_BATT_ID_PIN (902+2)
 
 static struct bq2022a_platform_data *g_bq2022a;
@@ -42,16 +44,19 @@ unsigned char bq2022a_sdq_detect(void)
 	static volatile unsigned char InputData;
 	static volatile unsigned char GotPulse;
 
+
 	gpio_direction_output(bq2022a_bat_id, GPIO_LOW);
 
+	/* Reset time should be > 480 usec */
 	udelay(800);
 	gpio_direction_input(bq2022a_bat_id);
 	udelay(60);
 
+
 	while ((PresenceTimer > 0) && (GotPulse == 0)) {
 		InputData = gpio_get_value(bq2022a_bat_id);
 		if (InputData == 0) {
-		GotPulse = 1;
+			GotPulse = 1;
 		} else {
 			GotPulse = 0;
 			--PresenceTimer;
@@ -61,11 +66,13 @@ unsigned char bq2022a_sdq_detect(void)
 
 	return GotPulse;
 }
+
 unsigned char bq2022a_sdq_readbyte(int time)
 {
 	unsigned char data = 0x00;
 	unsigned char mask, i;
 	unsigned long flags;
+
 
 	spin_lock_irqsave(&g_bq2022a->bqlock, flags);
 
@@ -82,9 +89,10 @@ unsigned char bq2022a_sdq_readbyte(int time)
 	}
 
 	udelay(200);
+
 	spin_unlock_irqrestore(&g_bq2022a->bqlock, flags);
 
-	return data;
+  return data;
 }
 
 void bq2022a_sdq_writebyte(u8 value)
@@ -92,6 +100,7 @@ void bq2022a_sdq_writebyte(u8 value)
 	unsigned char mask = 1;
 	int i;
 	unsigned long flags;
+
 
 	spin_lock_irqsave(&g_bq2022a->bqlock, flags);
 
@@ -115,12 +124,13 @@ void bq2022a_sdq_writebyte(u8 value)
 		mask <<= 1;
 	}
 
+
 	spin_unlock_irqrestore(&g_bq2022a->bqlock, flags);
 
 }
 
 static int bat_module_id;
-bool is_battery_feedback;
+bool is_battery_feedback = false;
 
 static const unsigned char con_bat_id[] = {
 	0xed, 0x21, 0x4c, 0xe5,
@@ -169,9 +179,9 @@ static int bq2022a_read_bat_id(int delay_time, int pimc_pin)
 	bat_id = bq2022a_sdq_readbyte(delay_time);
 	gpio_direction_output(bq2022a_bat_id, GPIO_HIGH);
 
-	if (((0 < bat_module_id) && (bat_module_id < 11)) || (bat_module_id == 17))
+	if (((0 < bat_module_id) && (bat_module_id < 11)) || (bat_module_id == 17)) {
 		pr_debug("get correct ID!!\n");
-	else {
+	} else {
 		if (is_battery_feedback) {
 			bat_module_id = 0;
 			pr_debug("use common ID!!\n");
@@ -194,7 +204,7 @@ int bq2022a_get_bat_module_id(void)
 }
 EXPORT_SYMBOL_GPL(bq2022a_get_bat_module_id);
 static const struct of_device_id of_bq2022as_match[] = {
-	{ .compatible = "bq2022a", },
+	{.compatible = "bq2022a",},
 	{},
 };
 
@@ -207,7 +217,7 @@ static int bq2022a_probe(struct platform_device *pdev)
 
 	pr_debug(" entry!\n");
 
-	bq2022a_bat_id = of_get_named_gpio(pdev->dev.of_node, "qcom,bq2022a-id-gpio", 0);
+	bq2022a_bat_id = of_get_named_gpio(pdev->dev.of_node, "qcom, bq2022a-id-gpio", 0);
 	if (bq2022a_bat_id <= 0) {
 		pr_err("can't get battery id pin from dts nod, so use BB gpio2\n");
 		bq2022a_bat_id = GPIO_BATT_ID_PIN;
@@ -233,7 +243,7 @@ static int bq2022a_probe(struct platform_device *pdev)
 	delay_time = 5;
 	do {
 		msleep(10);
-		rc = bq2022a_read_bat_id(delay_time, 1);
+		rc =bq2022a_read_bat_id(delay_time, 1);
 		delay_time++;
 	} while ((rc < 0) && (delay_time < 10));
 
@@ -246,53 +256,67 @@ static int bq2022a_probe(struct platform_device *pdev)
 			bq2022a_read_bat_id(delay_time, 0);
 		}
 	}
+
 	switch (bq2022a_get_bat_module_id()) {
 	case 0:
 		sprintf(bat_id_buf, "%s", "0 Common");
 		break;
+
 	case 1:
 		sprintf(bat_id_buf, "%s", "1 Sunwoda + Samsung");
 		break;
+
 	case 2:
 		sprintf(bat_id_buf, "%s", "2 Guangyu + Guangyu");
 		break;
+
 	case 3:
 		sprintf(bat_id_buf, "%s", "3 Sunwoda + Sony");
 		break;
+
 	case 4:
 		sprintf(bat_id_buf, "%s", "4 Sunwoda + Samsung(customdown)");
 		break;
+
 	case 5:
 		sprintf(bat_id_buf, "%s", "5 Desay + LG");
 		break;
+
 	case 6:
 		sprintf(bat_id_buf, "%s", "6 Feimaotui + Sony");
 		break;
+
 	case 7:
 		sprintf(bat_id_buf, "%s", "7 AAC");
 		break;
+
 	case 8:
 		sprintf(bat_id_buf, "%s", "8 Guangyu(2200)");
 		break;
+
 	case 9:
 		sprintf(bat_id_buf, "%s", "9 Desai(2200)");
 		break;
+
 	case 10:
 		sprintf(bat_id_buf, "%s", "10 Sunwoda(2200)");
 		break;
+
 	case 17:
 		sprintf(bat_id_buf, "%s", "17 Feimaotui + Samsung(MI2A)");
 		break;
+
 	case 0xff:
 	default:
 		sprintf(bat_id_buf, "%s", "error");
 		break;
 	}
 	pr_debug("battery module:%s", bat_id_buf);
-	/* hardwareinfo_set_prop(HARDWARE_BATTERY_ID, bat_id_buf); */
+
 	pr_err("success!!\n");
 
 	return rc;
+
 }
 
 static int bq2022a_remove(struct platform_device *pdev)
@@ -308,9 +332,9 @@ static struct platform_driver bq2022a_driver = {
 	.probe		= bq2022a_probe,
 	.remove		= bq2022a_remove,
 	.driver		= {
-	.name		= "bq2022a",
-	.owner		= THIS_MODULE,
-	.of_match_table = of_match_ptr(of_bq2022as_match),
+		.name	= "bq2022a",
+		.owner	= THIS_MODULE,
+		.of_match_table = of_match_ptr(of_bq2022as_match),
 	},
 };
 

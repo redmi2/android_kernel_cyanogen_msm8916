@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2016 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -55,6 +56,15 @@
 #define MDSS_DSI_HW_REV_103_1		0x10030001	/* 8916/8936 */
 
 #define NONE_PANEL "none"
+
+enum {
+	WARM = 1,
+	COOL = 3,
+	NATURE = 2,
+	STANDARD = 10,
+	VIVID = 11,
+	BRIGHT = 12,
+};
 
 enum {		/* mipi dsi panel */
 	DSI_VIDEO_MODE,
@@ -123,7 +133,8 @@ enum dsi_pm_type {
 	DSI_PANEL_PM,
 	DSI_MAX_PM
 };
-
+#define STATUS_CMDS_NUM 5
+#define STATUS_VALUE_NUM 5
 #define CTRL_STATE_UNKNOWN		0x00
 #define CTRL_STATE_PANEL_INIT		BIT(0)
 #define CTRL_STATE_MDP_ACTIVE		BIT(1)
@@ -302,7 +313,6 @@ enum {
 struct mdss_dsi_ctrl_pdata {
 	int ndx;	/* panel_num */
 	int (*on) (struct mdss_panel_data *pdata);
-	int (*post_panel_on)(struct mdss_panel_data *pdata);
 	int (*off) (struct mdss_panel_data *pdata);
 	int (*low_power_config) (struct mdss_panel_data *pdata, int enable);
 	int (*set_col_page_addr) (struct mdss_panel_data *pdata);
@@ -371,12 +381,24 @@ struct mdss_dsi_ctrl_pdata {
 	struct mdss_intf_recovery *recovery;
 
 	struct dsi_panel_cmds on_cmds;
-	struct dsi_panel_cmds post_dms_on_cmds;
-	struct dsi_panel_cmds post_panel_on_cmds;
 	struct dsi_panel_cmds off_cmds;
-	struct dsi_panel_cmds status_cmds;
+	struct dsi_panel_cmds status_cmds[STATUS_CMDS_NUM];
+	struct dsi_panel_cmds warm_cmds;
+	struct dsi_panel_cmds cool_cmds;
+	struct dsi_panel_cmds nature_cmds;
+	struct dsi_panel_cmds vivid_cmds;
+	struct dsi_panel_cmds standard_cmds;
+	struct dsi_panel_cmds bright_cmds;
+	struct dsi_panel_cmds eye_cmds[8];
+	int eye_cmds_num;
+
+	struct dsi_panel_cmds dispparam_cmds;
+	struct dsi_panel_cmds gamma_cmds;
+	struct dsi_panel_cmds ce_cmds;
+	bool init_last;
+	int status_cmds_num;
 	u32 status_cmds_rlen;
-	u32 status_value;
+	u32 status_value[STATUS_CMDS_NUM][STATUS_VALUE_NUM];
 	u32 status_error_count;
 
 	struct dsi_panel_cmds video2cmd;
@@ -393,7 +415,6 @@ struct mdss_dsi_ctrl_pdata {
 	int mdp_busy;
 	struct mutex mutex;
 	struct mutex cmd_mutex;
-	struct mutex cmdlist_mutex;
 	struct mutex clk_lane_mutex;
 
 	u32 ulps_clamp_ctrl_off;
@@ -402,7 +423,6 @@ struct mdss_dsi_ctrl_pdata {
 	bool core_power;
 	bool mmss_clamp;
 	bool timing_db_mode;
-	bool burst_mode_enabled;
 
 	struct dsi_buf tx_buf;
 	struct dsi_buf rx_buf;
@@ -485,6 +505,9 @@ void mdss_dsi_wait4video_done(struct mdss_dsi_ctrl_pdata *ctrl);
 void mdss_dsi_en_wait4dynamic_done(struct mdss_dsi_ctrl_pdata *ctrl);
 int mdss_dsi_cmdlist_commit(struct mdss_dsi_ctrl_pdata *ctrl, int from_mdp);
 void mdss_dsi_cmdlist_kickoff(int intf);
+int mdss_panel_set_ce(struct mdss_panel_data *pdata, int mode);
+int mdss_panel_set_gamma(struct mdss_panel_data *pdata, int mode);
+int mdss_panel_set_dispparam(struct mdss_panel_data *pdata, int level);
 int mdss_dsi_bta_status_check(struct mdss_dsi_ctrl_pdata *ctrl);
 int mdss_dsi_reg_status_check(struct mdss_dsi_ctrl_pdata *ctrl);
 bool __mdss_dsi_clk_enabled(struct mdss_dsi_ctrl_pdata *ctrl, u8 clk_type);
@@ -503,7 +526,6 @@ int mdss_panel_get_dst_fmt(u32 bpp, char mipi_mode, u32 pixel_packing,
 
 int mdss_dsi_register_recovery_handler(struct mdss_dsi_ctrl_pdata *ctrl,
 		struct mdss_intf_recovery *recovery);
-void mdss_dsi_unregister_bl_settings(struct mdss_dsi_ctrl_pdata *ctrl_pdata);
 
 static inline const char *__mdss_dsi_pm_name(enum dsi_pm_type module)
 {

@@ -1,4 +1,5 @@
 /* Copyright (c) 2014-2015, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2016 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -78,7 +79,7 @@
 
 		qseecom_mem: qseecom_region@0 {
 			linux,reserve-contiguous-region;
-			reg = <0 0 0 0x1000000>;
+			reg = <0 0 0 0x1900000>;
 			label = "qseecom_mem";
 		};
 
@@ -94,6 +95,15 @@
 			reg = <0x0 0x83000000 0x0 0x2000000>;
 			label = "cont_splash_mem";
 		};
+
+		tzapp_mem: tzapp_region@0 {
+			linux,reserve-contiguous-region;
+			linux,reserve-region;
+			linux,remove-completely;
+			reg = <0 0x8C400000 0 0x1900000>;
+			label = "tzapp_mem";
+		};
+
 	};
 
 	soc: soc { };
@@ -469,7 +479,7 @@
 		interrupts = <0 145 0 0 146 0>;
 		interrupt-names = "wcnss_wlantx_irq", "wcnss_wlanrx_irq";
 
-		qcom,pronto-vddmx-supply = <&pm8916_l3_corner_ao>;
+		qcom,pronto-vddmx-supply = <&pm8916_l3>;
 		qcom,pronto-vddcx-supply = <&pm8916_s2_corner>;
 		qcom,pronto-vddpx-supply = <&pm8916_l7>;
 		qcom,iris-vddxo-supply   = <&pm8916_l7>;
@@ -720,9 +730,9 @@
 		qcom,ce-opp-freq = <100000000>;
 	};
 
-	qcom_seecom: qseecom@86000000 {
+	qcom_seecom: qseecom@8C400000 {
 		compatible = "qcom,qseecom";
-		reg = <0x86000000 0x300000>;
+		reg = <0x8C400000 0x1900000>;
 		reg-names = "secapp-region";
 		qcom,disk-encrypt-pipe-pair = <2>;
 		qcom,hlos-ce-hw-instance = <0>;
@@ -1128,7 +1138,7 @@
 			 <&clock_gcc clk_gcc_sdcc2_apps_clk>;
 		clock-names = "iface_clk", "core_clk";
 
-		qcom,clk-rates = <400000 25000000 50000000 100000000 200000000>;
+		qcom,clk-rates = <400000 25000000 50000000 100000000 177770000>;
 
 		status = "disabled";
 	};
@@ -1417,11 +1427,6 @@
 		bt_sco_tx: qcom,msm-dai-q6-bt-sco-tx {
 			compatible = "qcom,msm-dai-q6-dev";
 			qcom,msm-dai-q6-dev-id = <12289>;
-		};
-
-		bt_a2dp_rx: qcom,msm-dai-q6-bt-a2dp-rx {
-			compatible = "qcom,msm-dai-q6-dev";
-			qcom,msm-dai-q6-dev-id = <12290>;
 		};
 
 		int_fm_rx: qcom,msm-dai-q6-int-fm-rx {
@@ -1840,6 +1845,7 @@
 		qcom,scale-function = <4>;
 		qcom,hw-settle-time = <2>;
 		qcom,fast-avg-setup = <0>;
+		qcom,vadc-thermal-node;
 	};
 
 	chan@3c {

@@ -136,9 +136,8 @@ static struct vregs_info iris_vregs_pronto_v2[] = {
 
 /* WCNSS regulators for Pronto v2 hardware */
 static struct vregs_info pronto_vregs_pronto_v2[] = {
-	{"qcom,pronto-vddmx",  VREG_NULL_CONFIG,
-		RPM_REGULATOR_CORNER_SUPER_TURBO,  0,
-		RPM_REGULATOR_CORNER_SUPER_TURBO, 0,    NULL},
+	{"qcom,pronto-vddmx",  VREG_NULL_CONFIG, 1287500,  0,
+		1287500, 0,    NULL},
 	{"qcom,pronto-vddcx",  VREG_NULL_CONFIG, RPM_REGULATOR_CORNER_NORMAL,
 		RPM_REGULATOR_CORNER_NONE, RPM_REGULATOR_CORNER_SUPER_TURBO,
 		0,             NULL},
@@ -232,7 +231,6 @@ int wcnss_get_iris_name(char *iris_name)
 
 	return 0;
 }
-EXPORT_SYMBOL(wcnss_get_iris_name);
 
 int validate_iris_chip_id(u32 reg)
 {
@@ -393,8 +391,6 @@ configure_iris_xo(struct device *dev,
 			auto_detect = WCNSS_XO_48MHZ;
 		else
 			auto_detect = WCNSS_XO_INVALID;
-
-		cfg->iris_id = iris_reg;
 
 		/* Clear XO_MODE[b2:b1] bits. Clear implies 19.2 MHz TCXO */
 		reg &= ~(WCNSS_PMU_CFG_IRIS_XO_MODE);

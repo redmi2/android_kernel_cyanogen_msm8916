@@ -1,10 +1,11 @@
 /*!
  * @section LICENSE
  * (C) Copyright 2013 Bosch Sensortec GmbH All Rights Reserved
+ * Copyright (C) 2016 XiaoMi, Inc.
  *
  * This software program is licensed subject to the GNU General
  * Public License (GPL).Version 2,June 1991,
- * available at http://www.fsf.org/copyleft/gpl.html
+ * available at http:
  *
  * @filename bma2x2.c
  * @date    2014/02/13 15:50
@@ -14,6 +15,10 @@
  * @brief
  * This file contains all function implementations for the BMA2X2 in linux
 */
+
+#include <linux/platform_device.h>
+#include <linux/uaccess.h>
+#include <asm/uaccess.h>
 
 #ifdef CONFIG_SIG_MOTION
 #undef CONFIG_HAS_EARLYSUSPEND
@@ -32,7 +37,7 @@
 #include <linux/regulator/consumer.h>
 #include <linux/of_gpio.h>
 #include <linux/sensors.h>
-#include <linux/kthread.h>
+#include <linux/hardware_info.h>
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
@@ -49,16 +54,22 @@
 #include <sys/types.h>
 #include <string.h>
 #endif
+#include <linux/miscdevice.h>
 
 #include "bstclass.h"
 
 #define ACC_NAME  "ACC"
+#define BMA2X2_ENABLE_INT1
 
 #ifdef ENABLE_ISR_DEBUG_MSG
 #define ISR_INFO(dev, fmt, arg...) dev_info(dev, fmt, ##arg)
 #else
 #define ISR_INFO(dev, fmt, arg...)
 #endif
+
+#define BMA2X2_SENSOR_IDENTIFICATION_ENABLE
+#define GS_GET_RAW_DATA_FOR_CALI	_IOW('c', 9, int *)
+#define GS_REC_DATA_FOR_PER	_IOW('c', 10, int *)
 
 #define SENSOR_NAME                 "bma2x2-accel"
 #define ABSMIN                      -512
@@ -86,7 +97,6 @@
 /* wait 10ms for self test  done */
 #define SELF_TEST_DELAY()           usleep_range(10000, 15000)
 
-#ifdef USE_BMA_INTERRUPT
 #define LOW_G_INTERRUPT             REL_Z
 #define HIGH_G_INTERRUPT            REL_HWHEEL
 #define SLOP_INTERRUPT              REL_DIAL
@@ -95,17 +105,6 @@
 #define ORIENT_INTERRUPT            ABS_PRESSURE
 #define FLAT_INTERRUPT              ABS_DISTANCE
 #define SLOW_NO_MOTION_INTERRUPT    REL_Y
-#else
-/* AndroidM didn't use the dev-interrupt,bypass above defines */
-#define LOW_G_INTERRUPT             REL_Z
-#define HIGH_G_INTERRUPT            REL_Z
-#define SLOP_INTERRUPT              REL_Z
-#define DOUBLE_TAP_INTERRUPT        REL_Z
-#define SINGLE_TAP_INTERRUPT        REL_Z
-#define ORIENT_INTERRUPT            REL_Z
-#define FLAT_INTERRUPT              REL_Z
-#define SLOW_NO_MOTION_INTERRUPT    REL_Z
-#endif
 
 #define HIGH_G_INTERRUPT_X_HAPPENED                 1
 #define HIGH_G_INTERRUPT_Y_HAPPENED                 2
@@ -1403,14 +1402,19 @@ static const struct interrupt_map_t int_map[] = {
 #define POLL_INTERVAL_MAX_MS	4000
 #define POLL_DEFAULT_INTERVAL_MS 200
 
-#define POLL_MS_100HZ 10
-
 /* Interrupt delay in msecs */
 #define BMA_INT_MAX_DELAY	64
 
 #define MAX_RANGE_MAP	4
 
 #define BMA_CAL_BUF_SIZE	99
+#define DEBUG
+#ifdef DEBUG
+#define wing_info(fmt, ...) \
+	printk("[wingtech] %s: "pr_fmt(fmt), __FUNCTION__, ##__VA_ARGS__)
+#else
+#define wing_info(fmt, ...)
+#endif
 
 struct bma2x2_type_map_t {
 
@@ -1474,6 +1478,12 @@ struct bma2x2acc {
 	s16 y;
 	s16 z;
 };
+struct cali_data{
+		int x ;
+		int y ;
+		int z ;
+		int offset;
+};
 
 struct bma2x2_platform_data {
 	int poll_interval;
@@ -1484,7 +1494,6 @@ struct bma2x2_platform_data {
 	s8 place;
 	bool int_en;
 	bool use_int2; /* Use interrupt pin2 */
-	bool use_hrtimer;
 };
 
 struct bma2x2_suspend_state {
@@ -1516,18 +1525,13 @@ struct bma2x2_data {
 	struct bst_dev *bst_acc;
 
 	struct bma2x2acc value;
+	struct bma2x2acc cali_value;
 	struct mutex value_mutex;
 	struct mutex enable_mutex;
 	struct mutex mode_mutex;
-	struct mutex op_lock;
 	struct workqueue_struct *data_wq;
 	struct delayed_work work;
 	struct work_struct irq_work;
-	struct hrtimer accel_timer;
-	int accel_wkp_flag;
-	struct task_struct *accel_task;
-	bool accel_delay_change;
-	wait_queue_head_t accel_wq;
 	struct regulator *vdd;
 	struct regulator *vio;
 	bool power_enabled;
@@ -1585,6 +1589,7 @@ static int bma2x2_eeprom_prog(struct i2c_client *client);
 static int bma2x2_get_sensitivity(struct bma2x2_data *bma2x2, int range);
 static void bma2x2_pinctrl_state(struct bma2x2_data *data, bool active);
 
+static struct bma2x2_data *bma_global_data;
 static struct sensors_classdev sensors_cdev = {
 		.name = "bma2x2-accel",
 		.vendor = "bosch",
@@ -5041,6 +5046,9 @@ static void bma2x2_report_axis_data(struct bma2x2_data *bma2x2,
 			"read accel data failed! err = %d\n", err);
 		return;
 	}
+	value->x = value->x-bma_global_data->cali_value.x;
+	value->y = value->y-bma_global_data->cali_value.y;
+	value->z = value->z-bma_global_data->cali_value.z;
 	input_report_abs(bma2x2->input, ABS_X,
 			(int)value->x << bma2x2->sensitivity);
 	input_report_abs(bma2x2->input, ABS_Y,
@@ -5066,51 +5074,6 @@ static void bma2x2_work_func(struct work_struct *work)
 	bma2x2->value = value;
 	mutex_unlock(&bma2x2->value_mutex);
 	queue_delayed_work(bma2x2->data_wq, &bma2x2->work, delay);
-}
-
-static enum hrtimer_restart accel_timer_handle(struct hrtimer *hrtimer)
-{
-	struct bma2x2_data *bma2x2;
-	ktime_t ktime;
-
-	bma2x2 = container_of(hrtimer, struct bma2x2_data, accel_timer);
-	ktime = ktime_set(0, atomic_read(&bma2x2->delay) * NSEC_PER_MSEC);
-	hrtimer_forward_now(&bma2x2->accel_timer, ktime);
-	bma2x2->accel_wkp_flag = 1;
-	wake_up_interruptible(&bma2x2->accel_wq);
-	return HRTIMER_RESTART;
-}
-
-static int accel_poll_thread(void *data)
-{
-	struct bma2x2_data *bma2x2 = data;
-	struct bma2x2acc value;
-
-	while (1) {
-		wait_event_interruptible(bma2x2->accel_wq,
-			((bma2x2->accel_wkp_flag != 0) ||
-				kthread_should_stop()));
-		bma2x2->accel_wkp_flag = 0;
-		if (kthread_should_stop())
-			break;
-
-		mutex_lock(&bma2x2->op_lock);
-		if (bma2x2->accel_delay_change) {
-			if (atomic_read(&bma2x2->delay) <= POLL_MS_100HZ)
-				set_wake_up_idle(true);
-			else
-				set_wake_up_idle(false);
-			bma2x2->accel_delay_change = false;
-		}
-		mutex_unlock(&bma2x2->op_lock);
-
-		bma2x2_report_axis_data(bma2x2, &value);
-		mutex_lock(&bma2x2->value_mutex);
-		bma2x2->value = value;
-		mutex_unlock(&bma2x2->value_mutex);
-	}
-
-	return 0;
 }
 
 static ssize_t bma2x2_register_store(struct device *dev,
@@ -5411,8 +5374,6 @@ static void bma2x2_set_enable(struct device *dev, int enable)
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma2x2_data *bma2x2 = i2c_get_clientdata(client);
 	int pre_enable = atomic_read(&bma2x2->enable);
-	ktime_t ktime;
-	int delay_ms;
 
 	if (atomic_read(&bma2x2->cal_status)) {
 		dev_err(dev, "can not enable or disable when calibration\n");
@@ -5447,18 +5408,10 @@ static void bma2x2_set_enable(struct device *dev, int enable)
 				bma2x2_pinctrl_state(bma2x2, true);
 				enable_irq(bma2x2->IRQ);
 			} else {
-				if (!bma2x2->pdata->use_hrtimer) {
-					delay_ms = atomic_read(&bma2x2->delay);
-					queue_delayed_work(bma2x2->data_wq,
-						&bma2x2->work,
-						msecs_to_jiffies(delay_ms));
-				} else {
-					ktime = ktime_set(0,
-						atomic_read(&bma2x2->delay)
-						* NSEC_PER_MSEC);
-					hrtimer_start(&bma2x2->accel_timer,
-						ktime, HRTIMER_MODE_REL);
-				}
+				queue_delayed_work(bma2x2->data_wq,
+					&bma2x2->work,
+					msecs_to_jiffies
+					(atomic_read(&bma2x2->delay)));
 			}
 			atomic_set(&bma2x2->enable, 1);
 		}
@@ -5489,10 +5442,7 @@ static void bma2x2_set_enable(struct device *dev, int enable)
 					goto mutex_exit;
 				}
 			} else {
-			if (!bma2x2->pdata->use_hrtimer)
 				cancel_delayed_work_sync(&bma2x2->work);
-			else
-				hrtimer_cancel(&bma2x2->accel_timer);
 			}
 
 			atomic_set(&bma2x2->enable, 0);
@@ -7459,8 +7409,6 @@ static int bma2x2_parse_dt(struct device *dev,
 
 	pdata->use_int2 = of_property_read_bool(np, "bosch,use-int2");
 
-	pdata->use_hrtimer = of_property_read_bool(np, "bosch,use-hrtimer");
-
 	pdata->gpio_int1 = of_get_named_gpio_flags(dev->of_node,
 				"bosch,gpio-int1", 0, &pdata->int1_flag);
 
@@ -7637,6 +7585,84 @@ static void bma2x2_pinctrl_state(struct bma2x2_data *data,
 	}
 	dev_dbg(&dev, "Select pinctrl state=%d\n", active);
 }
+/* GS open fops */
+static int gs_open(struct inode *inode, struct file *file)
+{
+	return nonseekable_open(inode, file);
+}
+
+/* GS release fops */
+static int gs_release(struct inode *inode, struct file *file)
+{
+
+
+	return 0;
+}
+
+/* GS IOCTL */
+static long gs_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+
+	int rc = 0;
+	int err = 0;
+	void __user *argp = (void __user *)arg;
+
+	struct cali_data rawdata;
+	struct cali_data calidata;
+	struct 	bma2x2acc value;
+
+	switch (cmd) {
+
+	case GS_REC_DATA_FOR_PER:
+			if (copy_from_user(&calidata, argp, sizeof(calidata)))
+			return -EFAULT;
+			bma_global_data->cali_value.x = calidata.x;
+			bma_global_data->cali_value.y = calidata.y;
+			bma_global_data->cali_value.z = calidata.z;
+			printk("xmm gsensor nv cali x=%d, y=%d, z=%d\n", calidata.x, calidata.y, calidata.z);
+			break;
+	case GS_GET_RAW_DATA_FOR_CALI:
+			err = bma2x2_read_accel_xyz(bma_global_data->bma2x2_client,
+			bma_global_data->sensor_type, &value);
+		if (err < 0) {
+			dev_err(&bma_global_data->bma2x2_client->dev,
+				"read accel data failed! err = %d\n", err);
+			return -EINVAL;
+			}
+		mutex_lock(&bma_global_data->value_mutex);
+			rawdata.x = (int)value.x;
+			rawdata.y = (int)value.y;
+			rawdata.z = (int)value.z;
+		mutex_unlock(&bma_global_data->value_mutex);
+			rawdata.offset = 16384;
+			printk("xmm gsensor fastmmi read x=%d, y=%d, z=%d\n", rawdata.x, rawdata.y, rawdata.z);
+			if (copy_to_user(argp, &rawdata, sizeof(rawdata))) {
+				printk("xmm, cali err\n");
+				return -EFAULT;
+			}
+			break;
+
+	default:
+			pr_err("%s: INVALID COMMAND %d\n",
+				__func__, _IOC_NR(cmd));
+			rc = -EINVAL;
+	}
+
+	return rc;
+}
+
+static const struct file_operations gs_fops = {
+	.owner = THIS_MODULE,
+	.open = gs_open,
+	.release = gs_release,
+	.unlocked_ioctl = gs_ioctl
+};
+
+static struct miscdevice gs_misc = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "gsensor",
+	.fops = &gs_fops
+};
 
 static int bma2x2_probe(struct i2c_client *client,
 		const struct i2c_device_id *id)
@@ -7649,6 +7675,8 @@ static int bma2x2_probe(struct i2c_client *client,
 
 	struct input_dev *dev_interrupt;
 
+	wing_info("start...\n");
+
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
 		dev_err(&client->dev, "i2c_check_functionality error\n");
 		err = -EPERM;
@@ -7659,6 +7687,7 @@ static int bma2x2_probe(struct i2c_client *client,
 		err = -ENOMEM;
 		goto exit;
 	}
+	bma_global_data = data;
 	if (client->dev.of_node) {
 		pdata = devm_kzalloc(&client->dev,
 			sizeof(*pdata), GFP_KERNEL);
@@ -7716,7 +7745,6 @@ static int bma2x2_probe(struct i2c_client *client,
 	mutex_init(&data->value_mutex);
 	mutex_init(&data->mode_mutex);
 	mutex_init(&data->enable_mutex);
-	mutex_init(&data->op_lock);
 	data->bandwidth = BMA2X2_BW_SET;
 	data->range = BMA2X2_RANGE_SET;
 	data->sensitivity = bosch_sensor_range_map[0];
@@ -7781,18 +7809,7 @@ static int bma2x2_probe(struct i2c_client *client,
 		disable_irq(data->IRQ);
 		INIT_WORK(&data->irq_work, bma2x2_irq_work_func);
 	} else {
-		if (!pdata->use_hrtimer) {
-			INIT_DELAYED_WORK(&data->work, bma2x2_work_func);
-		} else {
-			hrtimer_init(&data->accel_timer,
-					CLOCK_BOOTTIME, HRTIMER_MODE_REL);
-			data->accel_timer.function = accel_timer_handle;
-
-			init_waitqueue_head(&data->accel_wq);
-			data->accel_wkp_flag = 0;
-			data->accel_task = kthread_run(accel_poll_thread, data,
-					"bma_accel");
-		}
+		INIT_DELAYED_WORK(&data->work, bma2x2_work_func);
 	}
 
 	data->data_wq = create_freezable_workqueue("bma2x2_data_work");
@@ -8008,6 +8025,12 @@ static int bma2x2_probe(struct i2c_client *client,
 
 	bma2x2_pinctrl_state(data, false);
 	bma2x2_power_ctl(data, false);
+	err = misc_register(&gs_misc);
+	if (err < 0) {
+		return err;
+	}
+
+	wing_info("success.\n");
 	return 0;
 
 remove_bst_acc_sysfs_exit:
@@ -8043,12 +8066,7 @@ destroy_g_sensor_class_exit:
 #endif
 
 destroy_workqueue_exit:
-	if (!pdata->use_hrtimer) {
-		destroy_workqueue(data->data_wq);
-	} else {
-		hrtimer_cancel(&data->accel_timer);
-		kthread_stop(data->accel_task);
-	}
+	destroy_workqueue(data->data_wq);
 free_irq_exit:
 free_interrupt_gpio:
 	if (pdata->int_en) {
@@ -8073,6 +8091,7 @@ pdata_free_exit:
 kfree_exit:
 	kfree(data);
 exit:
+	wing_info("failed.\n");
 	return err;
 }
 
@@ -8085,12 +8104,8 @@ static void bma2x2_early_suspend(struct early_suspend *h)
 	mutex_lock(&data->enable_mutex);
 	if (atomic_read(&data->enable) == 1) {
 		bma2x2_set_mode(data->bma2x2_client, BMA2X2_MODE_SUSPEND);
-		if (!data->pdata->int_en) {
-			if (!data->pdata->use_hrtimer)
-				cancel_delayed_work_sync(&data->work);
-			else
-				hrtimer_cancel(&data->accel_timer);
-		}
+		if (!data->pdata->int_en)
+			cancel_delayed_work_sync(&data->work);
 	}
 	mutex_unlock(&data->enable_mutex);
 }
@@ -8103,18 +8118,10 @@ static void bma2x2_late_resume(struct early_suspend *h)
 	mutex_lock(&data->enable_mutex);
 	if (atomic_read(&data->enable) == 1) {
 		bma2x2_set_mode(data->bma2x2_client, BMA2X2_MODE_NORMAL);
-		if (!data->pdata->int_en) {
-			if (!data->pdata->use_hrtimer) {
-				queue_delayed_work(data->data_wq,
+		if (!data->pdata->int_en)
+			queue_delayed_work(data->data_wq,
 				&data->work,
 				msecs_to_jiffies(atomic_read(&data->delay)));
-			} else {
-				ktime = ktime_set(0,
-				atomic_read(&data->delay) * NSEC_PER_MSEC);
-				hrtimer_start(&data->accle_timer,
-						ktime, HRTIMER_MODE_REL);
-			}
-		}
 	}
 	mutex_unlock(&data->enable_mutex);
 }
@@ -8142,13 +8149,8 @@ static int bma2x2_remove(struct i2c_client *client)
 		sysfs_remove_group(&data->input->dev.kobj,
 				&bma2x2_attribute_group);
 
+	destroy_workqueue(data->data_wq);
 	bma2x2_set_enable(&client->dev, 0);
-	if (!data->pdata->use_hrtimer) {
-		destroy_workqueue(data->data_wq);
-	} else {
-		hrtimer_cancel(&data->accel_timer);
-		kthread_stop(data->accel_task);
-	}
 	bma2x2_power_deinit(data);
 	i2c_set_clientdata(client, NULL);
 	if (data->pdata && (client->dev.of_node))

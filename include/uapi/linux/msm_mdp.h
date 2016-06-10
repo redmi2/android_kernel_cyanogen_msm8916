@@ -69,6 +69,10 @@
 						struct mdp_overlay_list)
 #define MSMFB_LPM_ENABLE	_IOWR(MSMFB_IOCTL_MAGIC, 170, unsigned int)
 
+#define MSMFB_ENHANCE_SET_GAMMA   _IOWR(MSMFB_IOCTL_MAGIC, 171, unsigned int)
+#define MSMFB_ENHANCE_SET_CE   _IOWR(MSMFB_IOCTL_MAGIC, 172, unsigned int)
+#define MSMFB_ENHANCE_SET_EYE   _IOWR(MSMFB_IOCTL_MAGIC, 173, unsigned int)
+
 #define FB_TYPE_3D_PANEL 0x10101010
 #define MDP_IMGTYPE2_START 0x10000
 #define MSMFB_DRIVER_VERSION	0xF9E8D701
@@ -116,6 +120,7 @@ enum {
 	NOTIFY_TYPE_SUSPEND,
 	NOTIFY_TYPE_UPDATE,
 	NOTIFY_TYPE_BL_UPDATE,
+	NOTIFY_TYPE_BL_AD_ATTEN_UPDATE,
 };
 
 enum {
@@ -539,7 +544,6 @@ enum mdss_mdp_blend_op {
 	BLEND_OP_MAX,
 };
 
-#define DECIMATED_DIMENSION(dim, deci) (((dim) + ((1 << (deci)) - 1)) >> (deci))
 #define MAX_PLANES	4
 struct mdp_scale_data {
 	uint8_t enable_pxl_ext;

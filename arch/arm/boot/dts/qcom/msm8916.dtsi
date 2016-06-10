@@ -310,7 +310,6 @@
 		clocks = <&clock_gcc clk_gpll0_ao_clk_src>,
 			 <&clock_gcc clk_a53sspll>;
 		clock-names = "clk-4", "clk-5";
-		#clock-cells = <1>;
 		qcom,speed0-bin-v0 =
 			<          0 0>,
 			<  200000000 1>,
@@ -331,14 +330,6 @@
 			<  998400000 5>,
 			< 1094400000 6>,
 			< 1152000000 7>;
-
-		qcom,speed3-bin-v0 =
-			<          0 0>,
-			<  200000000 1>,
-			<  400000000 2>,
-			<  533333000 3>,
-			<  800000000 4>,
-			<  998400000 5>;
 
 		qcom,speed0-bin-v1 =
 			<          0 0>,
@@ -362,14 +353,7 @@
 			< 1152000000 7>,
 			< 1209600000 8>,
 			< 1363200000 9>;
-
-		qcom,speed3-bin-v1 =
-			<          0 0>,
-			<  200000000 1>,
-			<  400000000 2>,
-			<  533333000 3>,
-			<  800000000 4>,
-			<  998400000 5>;
+		#clock-cells = <1>;
 	};
 
 	cpubw: qcom,cpubw {
@@ -827,7 +811,6 @@
 			qcom,smd-irq-bitmask = <0x1000>;
 			interrupts = <0 25 1>;
 			label = "modem";
-			qcom,not-loadable;
 		};
 
 		qcom,smsm-modem {
@@ -1046,11 +1029,6 @@
 		bt_sco_tx: qcom,msm-dai-q6-bt-sco-tx {
 			compatible = "qcom,msm-dai-q6-dev";
 			qcom,msm-dai-q6-dev-id = <12289>;
-		};
-
-		bt_a2dp_rx: qcom,msm-dai-q6-bt-a2dp-rx {
-			compatible = "qcom,msm-dai-q6-dev";
-			qcom,msm-dai-q6-dev-id = <12290>;
 		};
 
 		int_fm_rx: qcom,msm-dai-q6-int-fm-rx {
@@ -1365,7 +1343,7 @@
 		interrupts = <0 145 0 0 146 0>;
 		interrupt-names = "wcnss_wlantx_irq", "wcnss_wlanrx_irq";
 
-		qcom,pronto-vddmx-supply = <&pm8916_l3_corner_ao>;
+		qcom,pronto-vddmx-supply = <&pm8916_l3>;
 		qcom,pronto-vddcx-supply = <&pm8916_s1_corner>;
 		qcom,pronto-vddpx-supply = <&pm8916_l7>;
 		qcom,iris-vddxo-supply   = <&pm8916_l7>;

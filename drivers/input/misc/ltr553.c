@@ -245,16 +245,11 @@ static struct sensors_classdev als_cdev = {
 	.version = 1,
 	.handle = SENSORS_LIGHT_HANDLE,
 	.type = SENSOR_TYPE_LIGHT,
-#ifdef CONFIG_MACH_WT88047
 	.max_range = "60000",
 	.resolution = "0.0125",
 	.min_delay = 0,
-#else
-	.max_range = "65536",
-	.resolution = "1.0",
-	.min_delay = 50000,
-#endif
 	.sensor_power = "0.25",
+	.min_delay = 50000,
 	.max_delay = 2000,
 	.fifo_reserved_event_count = 0,
 	.fifo_max_event_count = 0,
@@ -271,16 +266,11 @@ static struct sensors_classdev ps_cdev = {
 	.version = 1,
 	.handle = SENSORS_PROXIMITY_HANDLE,
 	.type = SENSOR_TYPE_PROXIMITY,
-#ifdef CONFIG_MACH_WT88047
 	.max_range = "5",
 	.resolution = "5.0",
 	.min_delay = 0,
-#else
-	.max_range = "7",
-	.resolution = "1.0",
-	.min_delay = 10000,
-#endif
 	.sensor_power = "0.25",
+	.min_delay = 10000,
 	.max_delay = 2000,
 	.fifo_reserved_event_count = 0,
 	.fifo_max_event_count = 0,
@@ -1166,8 +1156,6 @@ static int ltr553_enable_ps(struct ltr553_data *ltr, int enable)
 		}
 
 		ltr->ps_enabled = true;
-		if (!ltr->als_enabled)
-			enable_irq(ltr->irq);
 
 	} else {
 		/* disable ps_sensor */
@@ -1180,8 +1168,6 @@ static int ltr553_enable_ps(struct ltr553_data *ltr, int enable)
 		}
 
 		ltr->ps_enabled = false;
-		if (!ltr->als_enabled)
-			disable_irq(ltr->irq);
 	}
 exit:
 	return rc;
@@ -1239,8 +1225,6 @@ static int ltr553_enable_als(struct ltr553_data *ltr, int enable)
 		}
 
 		ltr->als_enabled = true;
-		if (!ltr->ps_enabled)
-			enable_irq(ltr->irq);
 	} else {
 		/* disable als sensor */
 		rc = regmap_write(ltr->regmap, LTR553_REG_ALS_CTL,
@@ -1252,8 +1236,6 @@ static int ltr553_enable_als(struct ltr553_data *ltr, int enable)
 		}
 
 		ltr->als_enabled = false;
-		if (!ltr->ps_enabled)
-			disable_irq(ltr->irq);
 	}
 
 exit:
@@ -1991,7 +1973,6 @@ static int ltr553_probe(struct i2c_client *client,
 		/* device wakeup initialization */
 		device_init_wakeup(&client->dev, 1);
 
-		disable_irq(ltr->irq);
 		ltr->workqueue = alloc_workqueue("ltr553_workqueue",
 				WQ_NON_REENTRANT | WQ_FREEZABLE, 0);
 		INIT_WORK(&ltr->report_work, ltr553_report_work);
@@ -2163,13 +2144,13 @@ static int ltr553_suspend(struct device *dev)
 		}
 	} else {
 		/* power off */
-		if (ltr->als_enabled)
-			disable_irq(ltr->irq);
+		disable_irq(ltr->irq);
 		if (ltr->power_enabled) {
 			res = sensor_power_config(dev, power_config,
 					ARRAY_SIZE(power_config), false);
 			if (res) {
 				dev_err(dev, "failed to suspend ltr553\n");
+				enable_irq(ltr->irq);
 				goto exit;
 			}
 		}
@@ -2236,6 +2217,8 @@ static int ltr553_resume(struct device *dev)
 				goto exit_power_off;
 			}
 		}
+
+		enable_irq(ltr->irq);
 	}
 
 	return res;

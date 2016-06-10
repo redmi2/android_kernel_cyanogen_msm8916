@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2011-2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * This file is based on include/net/bluetooth/hci_core.h
  *
@@ -183,7 +183,6 @@ struct radio_hci_dev {
 	int (*send)(struct sk_buff *skb);
 	void (*destruct)(struct radio_hci_dev *hdev);
 	void (*notify)(struct radio_hci_dev *hdev, unsigned int evt);
-	void (*close_smd)(void);
 };
 
 int radio_hci_register_dev(struct radio_hci_dev *hdev);

@@ -306,8 +306,8 @@ static int kgsl_iommu_fault_handler(struct iommu_domain *domain,
 	struct kgsl_iommu *iommu;
 	struct kgsl_iommu_unit *iommu_unit;
 	struct kgsl_iommu_device *iommu_dev;
-	phys_addr_t ptbase;
-	unsigned int pid, fsr;
+	unsigned int ptbase, fsr;
+	unsigned int pid;
 	struct _mem_entry prev, next;
 	unsigned int fsynr0, fsynr1;
 	int write;
@@ -379,7 +379,7 @@ static int kgsl_iommu_fault_handler(struct iommu_domain *domain,
 	}
 
 	ptbase = KGSL_IOMMU_GET_CTX_REG_Q(iommu, iommu_unit,
-		iommu_dev->ctx_id, TTBR0) & KGSL_IOMMU_CTX_TTBR0_ADDR_MASK;
+				iommu_dev->ctx_id, TTBR0);
 
 	fsynr0 = KGSL_IOMMU_GET_CTX_REG(iommu, iommu_unit,
 		iommu_dev->ctx_id, FSYNR0);
@@ -402,8 +402,8 @@ static int kgsl_iommu_fault_handler(struct iommu_domain *domain,
 		KGSL_MEM_CRIT(iommu_dev->kgsldev,
 			"GPU PAGE FAULT: addr = %lX pid = %d\n", addr, pid);
 		KGSL_MEM_CRIT(iommu_dev->kgsldev,
-		 "context = %d TTBR0 = %pa FSR = %X FSYNR0 = %X FSYNR1 = %X(%s fault)\n",
-			iommu_dev->ctx_id, &ptbase, fsr, fsynr0, fsynr1,
+		 "context = %d TTBR0 = %X FSR = %X FSYNR0 = %X FSYNR1 = %X(%s fault)\n",
+			iommu_dev->ctx_id, ptbase, fsr, fsynr0, fsynr1,
 			write ? "write" : "read");
 
 		_check_if_freed(iommu_dev, addr, pid);
@@ -1724,16 +1724,14 @@ struct scatterlist *_create_sg_no_large_pages(struct kgsl_memdesc *memdesc)
 	struct page *page;
 	struct scatterlist *s, *s_temp, *sg_temp;
 	int sglen_alloc = 0;
-	uint64_t offset, pg_size;
+	uint64_t offset;
 	int i;
 
 	for_each_sg(memdesc->sg, s, memdesc->sglen, i) {
-		if (SZ_1M <= s->length) {
+		if (SZ_1M <= s->length)
 			sglen_alloc += s->length >> 16;
-			sglen_alloc += ((s->length & 0xF000) >> 12);
-		} else {
+		else
 			sglen_alloc++;
-		}
 	}
 	/* No large pages were detected */
 	if (sglen_alloc == memdesc->sglen)
@@ -1750,10 +1748,8 @@ struct scatterlist *_create_sg_no_large_pages(struct kgsl_memdesc *memdesc)
 		page = sg_page(s);
 		if (SZ_1M <= s->length) {
 			for (offset = 0; offset < s->length; s_temp++) {
-				pg_size = ((s->length - offset) >= SZ_64K) ?
-						SZ_64K : SZ_4K;
-				sg_set_page(s_temp, page, pg_size, offset);
-				offset += pg_size;
+				sg_set_page(s_temp, page, SZ_64K, offset);
+				offset += SZ_64K;
 			}
 		} else {
 			sg_set_page(s_temp, page, s->length, 0);
